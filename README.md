@@ -1,0 +1,1 @@
+Do a `bash prepare.sh` and follow it's instructions.
