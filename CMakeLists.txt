@@ -33,7 +33,7 @@ include_directories(include/
 #                   vendor/bullet/src/
                     vendor/glad/
 #                   vendor/glfw/include/
-                    # vendor/glm/
+                    vendor/glm/
 #                   vendor/stb/
                     )
 

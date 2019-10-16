@@ -6,6 +6,9 @@
 
 #include <shader.hh>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <algorithm>
 #include <array>
 #include <filesystem>
@@ -39,6 +42,20 @@ int main() {
   if (!gladLoadGLLoader(GLADloadproc(glfwGetProcAddress)))
     throw std::runtime_error{"GLAD init failed"};
 
+
+  // Adjust viewport upon window resize
+  glfwSetFramebufferSizeCallback(
+      window.get(), [](auto, int w, int h) { glViewport(0, 0, w, h); });
+  // Grab cursor
+  glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+
+  /* SHADERS */
+  Shader shader{};
+  shader.attach(fs::current_path() / "shader/empty.vert", GL_VERTEX_SHADER)
+      .attach(fs::current_path() / "shader/mono.frag", GL_FRAGMENT_SHADER)
+      .link();
+
   // VBO + VAO
   GLuint vboVertex, vboColor;
   GLuint vao;
@@ -66,28 +83,68 @@ int main() {
   glBindBuffer(GL_ARRAY_BUFFER, 0); // unbind buffer
   glBindVertexArray(0);             // unbind vertex array (VAO)
 
-  /* SHADERS */
-  Shader shader{};
-  shader.attach(fs::current_path() / "shader/empty.vert", GL_VERTEX_SHADER)
-      .attach(fs::current_path() / "shader/mono.frag", GL_FRAGMENT_SHADER)
-      .link();
-
-  // Adjust viewport upon window resize
-  glfwSetFramebufferSizeCallback(
-      window.get(), [](auto, int w, int h) { glViewport(0, 0, w, h); });
-
-  /* RENDER */
-  // set-up shader and scene
   glUseProgram(shader.id());
-  glBindVertexArray(vao);
+  GLuint mvp_uniform_location = shader.getUniform("mvp");
 
-  // set background
-  glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+
+  auto prespective_projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.0f);
+  auto cam_pos{glm::vec3(0, 0,-1)};
+  auto cam_up{glm::vec3(0, 1, 0)};
+  glm::dvec2 cursor_pos;
+  float keyboard_speed = 0.01;
+
+  // glEnable(GL_CULL_FACE);
+  // glCullFace(GL_FRONT);
   while (!glfwWindowShouldClose(window.get())) {
     if (glfwGetKey(window.get(), GLFW_KEY_Q) == GLFW_PRESS)
       glfwSetWindowShouldClose(window.get(), true);
 
+    auto cam_fwd {glm::vec3(0, 0, 1)};
+    auto cam_right{glm::normalize(glm::cross(cam_up, cam_fwd))};
+
+    glfwGetCursorPos(window.get(), &(cursor_pos.x), &(cursor_pos.y));
+    glm::vec3 cam_target =
+            glm::rotate(glm::mat4(1.0f),
+                    static_cast<float>(cursor_pos.x) * 0.2f * keyboard_speed,
+                    -cam_up) *
+        glm::rotate(glm::mat4(1.0f),
+                    static_cast<float>(cursor_pos.y) * 0.2f * keyboard_speed,
+                    cam_right) *
+            glm::vec4{cam_fwd, 0.0f};
+
+    auto cam_right_2{glm::normalize(glm::cross(cam_up, cam_target))};
+
+    if (glfwGetKey(window.get(), GLFW_KEY_W) == GLFW_PRESS)
+      cam_pos += cam_target * keyboard_speed;
+    if (glfwGetKey(window.get(), GLFW_KEY_A) == GLFW_PRESS)
+      cam_pos += cam_right_2 * keyboard_speed;
+    if (glfwGetKey(window.get(), GLFW_KEY_D) == GLFW_PRESS)
+      cam_pos -= cam_right_2 * keyboard_speed;
+    if (glfwGetKey(window.get(), GLFW_KEY_S) == GLFW_PRESS)
+      cam_pos -= cam_target * keyboard_speed;
+    if (glfwGetKey(window.get(), GLFW_KEY_I) == GLFW_PRESS)
+      cam_pos += cam_up * keyboard_speed;
+    if (glfwGetKey(window.get(), GLFW_KEY_K) == GLFW_PRESS)
+      cam_pos -= cam_up * keyboard_speed;
+
+    // cam_up = glm::rotate(
+    //     glm::mat4(1.0f), static_cast<float>(cursor_pos.x) * keyboard_speed,
+    //     -cam_right) * glm::vec4{cam_up, 0.0f};
+    // glm::mat4 mvp;
+    // mvp[0] = glm::vec4{cam_right, -cam_pos[0]};
+    // mvp[1] = glm::vec4{cam_up, -cam_pos[1]};
+    // mvp[2] = glm::vec4{cam_fwd, -cam_pos[2]};
+    // mvp[3] = glm::vec4{0, 0, 0, 1};
+    auto view_projection{glm::lookAt(cam_pos, cam_pos + cam_target, cam_up)};
+    auto mvp = prespective_projection * view_projection;
+
+    glUniformMatrix4fv(mvp_uniform_location, 1, GL_FALSE, glm::value_ptr(mvp));
+
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(shader.id());
+    glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     glfwPollEvents();
