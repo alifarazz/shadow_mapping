@@ -45,7 +45,7 @@ public:
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     } else {
       std::cerr << "TEXTURE::LOAD::FAILED TO LOAD AT " << path << std::endl;
-      glDeleteTextures(1, &textureID);
+      glDeleteTextures(1, &textureID); // don't leak texture
     }
 
     free_image(data);

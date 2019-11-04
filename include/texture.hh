@@ -13,7 +13,7 @@ public:
     None,
   };
 
-  ~Texture() { glDeleteTextures(1, &id); }
+  // ~Texture() { glDeleteTextures(1, &id); }
 
   GLuint id;
   Type type;

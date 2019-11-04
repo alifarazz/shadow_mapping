@@ -31,6 +31,9 @@ public:
 };
 
 auto Model::draw(Shader &shader) -> void {
+  // std::clog << "[Model::draw] before glUserProgram()" << std::endl;
+  glUseProgram(shader.id());
+  // std::clog << "[Model::draw] after glUserProgram()" << std::endl;
   for (uint i = 0; i < meshes.size(); i++)
     meshes[i].draw(shader);
 }

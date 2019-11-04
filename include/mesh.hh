@@ -27,7 +27,7 @@ public:
   Mesh(std::vector<Vertex> &vertices, std::vector<uint> &idices,
        std::vector<Texture> &textures);
 
-  auto draw(Shader &shader) -> void;
+  auto draw(const Shader &shader) -> void;
 
 private:
   uint VAO, VBO, EBO;
@@ -79,9 +79,10 @@ auto Mesh::setupMesh() -> void {
   glBindVertexArray(0);
 }
 
-auto Mesh::draw(Shader &shader) -> void {
-  uint diffuseN{1}, specularN{1};
+auto Mesh::draw(const Shader &shader) -> void {
+  uint diffuseN{1}, specularN{1}, normalN{1};
 
+  glBindVertexArray(VAO);
   for (uint i = 0; i < textures.size(); i++) {
     glActiveTexture(GL_TEXTURE0 + i);
 
@@ -89,17 +90,29 @@ auto Mesh::draw(Shader &shader) -> void {
     switch (textures[i].type) {
     case Texture::Type::Diffuse:
       name = "texture_diffuse" + std::to_string(diffuseN++);
+      // std::clog <<name;
       break;
     case Texture::Type::Specular:
       name = "texture_specular" + std::to_string(specularN++);
+      // std::clog <<name;
       break;
+    case Texture::Type::Normal:
+      name = "texture_normal" + std::to_string(normalN++);
+      // std::clog <<name;
+      break;
+      // case
     default:
       name = "INVALID";
       std::clog << "INVALIND NAME FOR TEXTURE: " << shader.id() << ':' << i
-                << ", TYPE:" << textures[i].type << std::endl;
+                << ", TYPE: " << textures[i].type << std::endl;
     }
 
-    glUniform1f(glGetUniformLocation(shader.id(), name.c_str()), i);
+    std::clog << "--> " << "material." + name << ": "
+              << glGetUniformLocation(shader.id(), ("material." + name).c_str())
+              << std::endl;
+    // glUniform1f(glGetUniformLocation(shader.id(), (name).c_str()), i);
+    glUniform1f(glGetUniformLocation(shader.id(), ("material." + name).c_str()), i);
+    // glUniform1f(shader.getUniform("material." + name), i);
     glBindTexture(GL_TEXTURE_2D, textures[i].id);
   }
   glActiveTexture(GL_TEXTURE0);
@@ -107,7 +120,6 @@ auto Mesh::draw(Shader &shader) -> void {
   // std::cout << indices.size() << std::endl;
 
   // draw mesh
-  glBindVertexArray(VAO);
   glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
   // glBindVertexArray(0);
 }

@@ -10,6 +10,8 @@
 #include <vector>
 namespace fs = std::filesystem;
 
+#include "utils.hh"
+
 class Shader {
 private:
   static auto ReadFile(const fs::path &path, std::string &content) -> void;
@@ -40,7 +42,7 @@ public:
   auto getUniform(const std::string &name) const -> GLint;
 };
 
-Shader::Shader() { program_ = glCreateProgram(); }
+Shader::Shader() { program_ = glCreateProgram();}
 
 Shader::~Shader() {
   // glUseProgram(0);

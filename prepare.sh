@@ -1,4 +1,5 @@
 #!/bin/bash 
+
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 echo $SCRIPTPATH
@@ -11,7 +12,8 @@ fi
 
 cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=YES ..
 ln -s $SCRIPTPATH/shader $SCRIPTPATH/build/base/
+ln -s $SCRIPTPATH/res $SCRIPTPATH/build/base/
 echo "**** All done! ****"
 echo "**** Do a make in build/ dir ****"
-exit 0
 
+exit 

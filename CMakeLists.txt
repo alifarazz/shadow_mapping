@@ -6,10 +6,10 @@ option(GLFW_BUILD_EXAMPLES OFF)
 option(GLFW_BUILD_TESTS OFF)
 add_subdirectory(vendor/glfw)
 
-# option(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
-# option(ASSIMP_BUILD_SAMPLES OFF)
-# option(ASSIMP_BUILD_TESTS OFF)
-# add_subdirectory(vendor/assimp)
+option(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+option(ASSIMP_BUILD_SAMPLES OFF)
+option(ASSIMP_BUILD_TESTS OFF)
+add_subdirectory(vendor/assimp)
 
 # option(BUILD_BULLET2_DEMOS OFF)
 # option(BUILD_CPU_DEMOS OFF)
@@ -21,7 +21,7 @@ add_subdirectory(vendor/glfw)
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4") # idk
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++17 -pipe")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++17 -pipe  -ggdb")
     if(NOT WIN32)
         set(GLAD_LIBRARIES dl)
     endif()
@@ -29,12 +29,11 @@ endif()
 
 include_directories(include/
                     # vendor/assimp/include/
-                    # vendor/stb/
+                    vendor/stb/
 #                   vendor/bullet/src/
                     vendor/glad/
-#                   vendor/glfw/include/
+                    # vendor/glfw/include/
                     vendor/glm/
-#                   vendor/stb/
                     )
 
 file(GLOB VENDORS_SOURCES vendor/glad/glad.c)
