@@ -9,7 +9,9 @@
 
 #include "model.hh"
 #include "shader.hh"
-// #include "shader.hh"
+#include "light.hh"
+#include "glfwwindow.hh"
+#include "camera.hh"
 
 #include <algorithm>
 #include <array>
@@ -53,9 +55,8 @@ int main()
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  std::unique_ptr<GLFWwindow, decltype(&destory_glfw_window)> window{
-      glfwCreateWindow(windowHeight, winWidth, "", nullptr, nullptr),
-      &destory_glfw_window};
+  GLFWwindowUniquePtr window{
+      glfwCreateWindow(windowHeight, winWidth, "", nullptr, nullptr)};
   glfwMakeContextCurrent(window.get());
   if (!window.get())
     throw std::runtime_error{"glfw window create failed"};
@@ -70,7 +71,7 @@ int main()
   glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   /* SHADERS */
-  Shader shader{}, shaderNanoSuit{};
+  Shader shader{}, shaderNanoSuit{}, shaderDirectionalLight;
   // shader.attach(fs::current_path() / "shader/empty.vert", GL_VERTEX_SHADER)
   //     .attach(fs::current_path() / "shader/mono.frag", GL_FRAGMENT_SHADER)
   //     .link();
@@ -78,139 +79,56 @@ int main()
       .attach(fs::current_path() / "shader/lambertian.vert", GL_VERTEX_SHADER)
       .attach(fs::current_path() / "shader/texture.frag", GL_FRAGMENT_SHADER)
       .link();
-
-  // // VBO + VAO
-  // GLuint vboVertex, vboColor;
-  // GLuint vao;
-  // GLuint ibo;
-  // glGenVertexArrays(1, &vao);
-  // glGenBuffers(1, &vboVertex);
-  // glGenBuffers(1, &vboColor);
-  // glGenBuffers(1, &ibo);
-
-  // glBindVertexArray(vao);  // bind vertex array (VAO)
-
-  // // bind ibo to save vbos
-  // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-  // glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-  //              indices.size() * sizeof(decltype(indices)::value_type),
-  //              indices.data(), GL_STATIC_DRAW);
-
-  // // vboVertex
-  // glBindBuffer(GL_ARRAY_BUFFER, vboVertex); // bind buffer
-  // glBufferData(GL_ARRAY_BUFFER,
-  //              vertices.size() * sizeof(decltype(vertices)::value_type),
-  //              vertices.data(), GL_STATIC_DRAW); // specify vertices
-  // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0,
-  //                       nullptr); // specify layout in shader
-  // glEnableVertexAttribArray(0);   // `pos` in shader/empty.vert
-
-  // // vboColor
-  // glBindBuffer(GL_ARRAY_BUFFER, vboColor);
-  // glBufferData(GL_ARRAY_BUFFER,
-  //              colors.size() * sizeof(decltype(colors)::value_type),
-  //              colors.data(), GL_STATIC_DRAW);
-  // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-  // glEnableVertexAttribArray(1); // `color` in shader/empty.vert
-
-  // glBindBuffer(GL_ARRAY_BUFFER, 0); // unbind buffer
-  // glBindVertexArray(0);             // unbind vertex array (VAO)
+  shaderDirectionalLight
+    .attach(fs::current_path() / "shader/shadow_mapping/shadow.vert", GL_VERTEX_SHADER)
+    .attach(fs::current_path() / "shader/shadow_mapping/shadow.frag", GL_FRAGMENT_SHADER)
+    .link();
 
   /* LOADING MODELS */
   // Model pyramid{fs::current_path() / fs::path("res/suzzane/Pyramid.obj")};
   // Model suzzane{fs::current_path() / fs::path("res/suzzane/suzzane.glb")};
-  Model suzzane{fs::current_path() / fs::path("res/nanosuit/nanosuit.obj")};
+  Model nanosuit{fs::current_path() / fs::path("res/nanosuit/nanosuit.obj")};
 
-  glUseProgram(shaderNanoSuit.id());
-  GLuint model_to_view_uniform_location = shaderNanoSuit.getUniform("modelToView");
-  GLuint view_to_world_uniform_location = shaderNanoSuit.getUniform("viewToWorld");
-  GLuint world_to_prespective_uniform_location =
-      shaderNanoSuit.getUniform("worldToPrespective");
+  /* LIGHTS */
+  // Light directionalLight{};
 
-  // OpenGL features //
+  //*OpenGL features */
   glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
   // glCullFace(GL_FRONT);
 
-  auto prespective_projection{
-      glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.001f, 100.0f)};
-  auto cam_pos{glm::vec3(0, 0, -1)};
   auto cam_up{glm::vec3(0, 1, 0)};
-  auto cam_fwd{glm::vec3(0, 0, 1)};
-  glm::dvec2 cursor_pos;
-  float keyboard_speed = 0.01;
+  auto cam_pos{glm::vec3(0, 0, 0)};
+  auto cam_fwd{glm::normalize(glm::vec3(1, 1, -1))};
+  FPSCamera camera{cam_pos,
+                   cam_fwd,
+                   cam_up,
+                   windowHeight / float(winWidth)};
+
+  float deltaTime, lastFrame;
   while (!glfwWindowShouldClose(window.get())) {
     if (glfwGetKey(window.get(), GLFW_KEY_Q) == GLFW_PRESS)
       glfwSetWindowShouldClose(window.get(), true);
+    float currentFrame = glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
 
-    glfwGetCursorPos(window.get(), &(cursor_pos.x), &(cursor_pos.y));
+    camera.renderloopUpdateMVP(window, deltaTime);
+    camera.model_transform[3][3] = 10; // down-scale everything by 10
 
-    auto cam_right{glm::cross(cam_up, cam_fwd)};
-
-    glm::vec3 cam_fwd2(
-        glm::rotate(glm::mat4(1.0f),
-                    static_cast<float>(cursor_pos.x) * 0.2f * keyboard_speed,
-                    -cam_up) *
-        glm::rotate(glm::mat4(1.0f),
-                    static_cast<float>(cursor_pos.y) * 0.2f * keyboard_speed,
-                    cam_right) *
-        glm::vec4{cam_fwd, 0.0f});
-
-    auto cam_right_2{glm::normalize(glm::cross(cam_up, cam_fwd2))};
-
-    if (glfwGetKey(window.get(), GLFW_KEY_W) == GLFW_PRESS)
-      cam_pos += cam_fwd2 * keyboard_speed;
-    if (glfwGetKey(window.get(), GLFW_KEY_A) == GLFW_PRESS)
-      cam_pos += cam_right_2 * keyboard_speed;
-    if (glfwGetKey(window.get(), GLFW_KEY_D) == GLFW_PRESS)
-      cam_pos -= cam_right_2 * keyboard_speed;
-    if (glfwGetKey(window.get(), GLFW_KEY_S) == GLFW_PRESS)
-      cam_pos -= cam_fwd2 * keyboard_speed;
-    if (glfwGetKey(window.get(), GLFW_KEY_SPACE) == GLFW_PRESS)
-      cam_pos += cam_up * keyboard_speed;
-    if (glfwGetKey(window.get(), GLFW_KEY_C) == GLFW_PRESS)
-      cam_pos -= cam_up * keyboard_speed;
-
-    // if (glfwGetKey(window.get(), GLFW_KEY_U) == GLFW_PRESS)
-    // vertices[3].z += keyboard_speed;
-    // if (glfwGetKey(window.get(), GLFW_KEY_J) == GLFW_PRESS)
-    // vertices[3].z -= keyboard_speed;
-    // glBindBuffer(GL_ARRAY_BUFFER, vboVertex);
-    // glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertices[0]),
-    // vertices.data(), GL_STATIC_DRAW);
-
-    // cam_up = glm::rotate(
-    //     glm::mat4(1.0f), static_cast<float>(cursor_pos.x) * keyboard_speed,
-    //     -cam_right) * glm::vec4{cam_up, 0.0f};
-    // glm::mat4 mvp;
-    // mvp[0] = glm::vec4{cam_right, -cam_pos[0]};
-    // mvp[1] = glm::vec4{cam_up, -cam_pos[1]};
-    // mvp[2] = glm::vec4{cam_fwd, -cam_pos[2]};
-    // mvp[3] = glm::vec4{0, 0, 0, 1};
-    auto view_transform{glm::lookAt(cam_pos, cam_pos + cam_fwd2, cam_up)};
-    auto model_transform{glm::mat4(1.0f)};
-    model_transform[3][3] = 10;
-    prespective_projection *view_transform *model_transform;
-
-    glUniformMatrix4fv(model_to_view_uniform_location, 1, GL_FALSE,
-                       glm::value_ptr(model_transform));
-    glUniformMatrix4fv(view_to_world_uniform_location, 1, GL_FALSE,
-                       glm::value_ptr(view_transform));
-    glUniformMatrix4fv(world_to_prespective_uniform_location, 1, GL_FALSE,
-                       glm::value_ptr(prespective_projection));
+    glUseProgram(shaderNanoSuit.id());
+    camera.uploadMVP(shaderNanoSuit.getUniform("modelToView"),
+                     shaderNanoSuit.getUniform("viewToWorld"),
+                     shaderNanoSuit.getUniform("worldToPrespective"));
 
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // glUseProgram(shader.id());
-    // glBindVertexArray(vao);
-    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    // glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
+    // glUseProgram(shaderNanoSuit.id());
+    nanosuit.draw(shaderNanoSuit);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 3);
-
-    suzzane.draw(shaderNanoSuit);
-    // pyramid.draw(shader);
+    // directionalLight.depthMVP = prespective_projection * view_transform * prespective_projection;
+    // directionalLight.render(shaderDirectionalLight, [&](Shader &shader){nanosuit.draw(shader)});
 
     glfwPollEvents();
     glfwSwapBuffers(window.get());
@@ -219,6 +137,7 @@ int main()
 
   /* CLEAN-UP */
   glDeleteProgram(shader.id());
+  glDeleteProgram(shaderDirectionalLight.id());
   glfwTerminate();
   return 0;
 }
