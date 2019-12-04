@@ -42,7 +42,7 @@ namespace fs = std::filesystem;
 //     1, 1, 0,
 // };
 
-auto destory_glfw_window(GLFWwindow *ptr) -> void { glfwDestroyWindow(ptr); }
+std::function<void(GLFWwindow *, double, double)> mouseCallbackStub;
 
 int main()
 {
@@ -66,12 +66,13 @@ int main()
   // Adjust viewport upon window resize
   glfwSetFramebufferSizeCallback(
       window.get(), [](auto, int w, int h) { glViewport(0, 0, w, h); });
+  glfwSetScrollCallback(window.get(), [](auto, auto, auto){});
 
   // Grab cursor
   glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   /* SHADERS */
-  Shader shader{}, shaderNanoSuit{}, shaderDirectionalLight;
+  Shader shaderNanoSuit{}, shaderRenderDepthMap{}, shaderShowDepthMap{};
   // shader.attach(fs::current_path() / "shader/empty.vert", GL_VERTEX_SHADER)
   //     .attach(fs::current_path() / "shader/mono.frag", GL_FRAGMENT_SHADER)
   //     .link();
@@ -79,9 +80,13 @@ int main()
       .attach(fs::current_path() / "shader/lambertian.vert", GL_VERTEX_SHADER)
       .attach(fs::current_path() / "shader/texture.frag", GL_FRAGMENT_SHADER)
       .link();
-  shaderDirectionalLight
+  shaderRenderDepthMap
     .attach(fs::current_path() / "shader/shadow_mapping/shadow.vert", GL_VERTEX_SHADER)
     .attach(fs::current_path() / "shader/shadow_mapping/shadow.frag", GL_FRAGMENT_SHADER)
+    .link();
+  shaderShowDepthMap
+    .attach(fs::current_path() / "shader/shadow_mapping/renderdepthmap/renderdepth.vert", GL_VERTEX_SHADER)
+    .attach(fs::current_path() / "shader/shadow_mapping/renderdepthmap/renderdepth.frag", GL_FRAGMENT_SHADER)
     .link();
 
   /* LOADING MODELS */
@@ -90,7 +95,7 @@ int main()
   Model nanosuit{fs::current_path() / fs::path("res/nanosuit/nanosuit.obj")};
 
   /* LIGHTS */
-  // Light directionalLight{};
+  Light directionalLight{};
 
   //*OpenGL features */
   glEnable(GL_CULL_FACE);
@@ -98,13 +103,17 @@ int main()
   // glCullFace(GL_FRONT);
 
   auto cam_up{glm::vec3(0, 1, 0)};
-  auto cam_pos{glm::vec3(0, 0, 0)};
-  auto cam_fwd{glm::normalize(glm::vec3(1, 1, -1))};
+  auto cam_pos{glm::vec3(0, 1, -1)};
+  auto cam_fwd{glm::normalize(glm::vec3(0, 1, -1))};
   FPSCamera camera{cam_pos,
                    cam_fwd,
                    cam_up,
                    windowHeight / float(winWidth)};
+  mouseCallbackStub = [&camera](GLFWwindow *w, double x, double y){camera.mouseCallback(w, x, y);};
+  glfwSetCursorPosCallback(window.get(), [](GLFWwindow *w, double x, double y){mouseCallbackStub(w, x, y);});
 
+
+  glClearColor(0.227451f, 0.227451f, 0.227451f, 1.0f);
   float deltaTime, lastFrame;
   while (!glfwWindowShouldClose(window.get())) {
     if (glfwGetKey(window.get(), GLFW_KEY_Q) == GLFW_PRESS)
@@ -116,29 +125,31 @@ int main()
     camera.renderloopUpdateMVP(window, deltaTime);
     camera.model_transform[3][3] = 10; // down-scale everything by 10
 
-    glUseProgram(shaderNanoSuit.id());
-    camera.uploadMVP(shaderNanoSuit.getUniform("modelToView"),
-                     shaderNanoSuit.getUniform("viewToWorld"),
-                     shaderNanoSuit.getUniform("worldToPrespective"));
-
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    /* BEGIN RENDER */
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // glUseProgram(shaderNanoSuit.id());
-    nanosuit.draw(shaderNanoSuit);
+    directionalLight.depthMVP2 = camera.prespective_transform * camera.view_transform * camera.model_transform;
+    directionalLight.render(shaderRenderDepthMap,
+                            [&](Shader &shader){nanosuit.draw(shader);},
+                            shaderShowDepthMap,
+                            [&]{nanosuit.drawWihtoutTextureBinding();});
 
-    // directionalLight.depthMVP = prespective_projection * view_transform * prespective_projection;
-    // directionalLight.render(shaderDirectionalLight, [&](Shader &shader){nanosuit.draw(shader)});
+    // glUseProgram(shaderNanoSuit.id());
+    // camera.uploadMVP(shaderNanoSuit.getUniform("modelToView"),
+    //                  shaderNanoSuit.getUniform("viewToWorld"),
+    //                  shaderNanoSuit.getUniform("worldToPrespective"));
+    // nanosuit.draw(shaderNanoSuit);
 
     glfwPollEvents();
     glfwSwapBuffers(window.get());
-    // return 0;
   }
 
   /* CLEAN-UP */
-  glDeleteProgram(shader.id());
-  glDeleteProgram(shaderDirectionalLight.id());
+  // glDeleteFramebuffers(1, &directionalLight.depthMapFBO);
+  // glDeleteTextures(1, &directionalLight.depthTexture);
+  glDeleteProgram(shaderNanoSuit.id());
+  glDeleteProgram(shaderRenderDepthMap.id());
+  glDeleteProgram(shaderShowDepthMap.id());
   glfwTerminate();
   return 0;
 }
-// cd .. && cd build && make && cd base && ./base && xdotool key , alt+0

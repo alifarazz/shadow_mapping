@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iostream>
 #include <vector>
+#include <string>
 namespace fs = std::filesystem;
 
 class Mesh {
@@ -27,7 +28,10 @@ public:
   Mesh(std::vector<Vertex> &vertices, std::vector<uint> &idices,
        std::vector<Texture> &textures);
 
-  auto draw(const Shader &shader) -> void;
+  auto draw() -> void;
+  auto bindVAO() const -> void;
+  auto bindTextures(const Shader &shader) -> void;
+  auto bindDraw(const Shader& shader) -> void;
 
 private:
   uint VAO, VBO, EBO;
@@ -79,10 +83,14 @@ auto Mesh::setupMesh() -> void {
   glBindVertexArray(0);
 }
 
-auto Mesh::draw(const Shader &shader) -> void {
-  uint diffuseN{1}, specularN{1}, normalN{1};
-
+auto Mesh::bindVAO() const -> void {
   glBindVertexArray(VAO);
+}
+
+auto Mesh::bindTextures(const Shader &shader) -> void{
+  using namespace std::string_literals;
+
+  uint diffuseN{1}, specularN{1}, normalN{1};
   for (uint i = 0; i < textures.size(); i++) {
     glActiveTexture(GL_TEXTURE0 + i);
 
@@ -106,22 +114,21 @@ auto Mesh::draw(const Shader &shader) -> void {
       std::clog << "INVALIND NAME FOR TEXTURE: " << shader.id() << ':' << i
                 << ", TYPE: " << textures[i].type << std::endl;
     }
-
-    std::clog << "--> " << "material." + name << ": "
-              << glGetUniformLocation(shader.id(), ("material." + name).c_str())
-              << std::endl;
-    // glUniform1f(glGetUniformLocation(shader.id(), (name).c_str()), i);
-    glUniform1f(glGetUniformLocation(shader.id(), ("material." + name).c_str()), i);
-    // glUniform1f(shader.getUniform("material." + name), i);
+    auto samplerLocation{glGetUniformLocation(shader.id(), ("material."s + name).c_str())};
+    // std::clog << "--> " << "material." + name << ": " << samplerLocation << std::endl;
+    glUniform1i(samplerLocation, i);
     glBindTexture(GL_TEXTURE_2D, textures[i].id);
   }
   glActiveTexture(GL_TEXTURE0);
-
-  // std::cout << indices.size() << std::endl;
-
-  // draw mesh
+}
+auto Mesh::draw() -> void {
   glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-  // glBindVertexArray(0);
+}
+
+auto Mesh::bindDraw(const Shader& shader) -> void {
+  bindVAO();
+  bindTextures(shader);
+  draw();
 }
 
 // class Mesh {

@@ -19,6 +19,7 @@ class Model {
 public:
   Model(const fs::path &file) { loadModel(file); }
   auto draw(Shader &shader) -> void;
+  auto drawWihtoutTextureBinding() -> void ;
 
   // protected:
   std::vector<Mesh> meshes;
@@ -31,11 +32,15 @@ public:
 };
 
 auto Model::draw(Shader &shader) -> void {
-  // std::clog << "[Model::draw] before glUserProgram()" << std::endl;
-  glUseProgram(shader.id());
-  // std::clog << "[Model::draw] after glUserProgram()" << std::endl;
   for (uint i = 0; i < meshes.size(); i++)
-    meshes[i].draw(shader);
+    meshes[i].bindDraw(shader);
+}
+
+auto Model::drawWihtoutTextureBinding() -> void {
+  for (uint i = 0; i < meshes.size(); i++){
+    meshes[i].bindVAO();
+    meshes[i].draw();
+  }
 }
 
 auto Model::loadModel(const fs::path &file) -> void {
@@ -98,9 +103,10 @@ auto Model::processMesh(aiMesh *mesh, const aiScene *scene) -> Mesh {
         loadMaterialTextures(material, aiTextureType_SPECULAR)};
     textures.insert(end(textures), begin(specularMaps), end(specularMaps));
   }
-  std::clog << "Vertices: " << vertices.size() << std::endl
-            << "Indices: " << indices.size() << std::endl
-            << "Textures: " << textures.size() << std::endl;
+  // std::clog << "Vertices: " << vertices.size() << std::endl
+            // << "Indices: " << indices.size() << std::endl
+            // << "Textures: " << textures.size() << std::endl;
+
   // for (std::size_t i = 0; i < 200; i++) {
   //   auto &x = vertices[i];
   //   std::clog << "(" << x.position.x << ", " << x.position.y << ", "
@@ -120,7 +126,7 @@ auto Model::loadMaterialTextures(aiMaterial *mat, aiTextureType type)
   std::vector<Texture> texes;
   texes.resize(n);
 
-  std::clog << "[Model::loadMaterialTextures]Texture Count: " << n << std::endl;
+  // std::clog << "[Model::loadMaterialTextures]Texture Count: " << n << std::endl;
   for (uint i = 0; i < n; i++) {
     aiString str;
     auto &t{texes[i]};
