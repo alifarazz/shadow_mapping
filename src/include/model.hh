@@ -9,6 +9,7 @@
 #include "texture.hh"
 #include "vertex.hh"
 #include "utils.hh"
+#include "texture_repo.hh"
 
 #include <filesystem>
 #include <iostream>
@@ -18,8 +19,18 @@ namespace fs = std::filesystem;
 class Model {
 public:
   Model(const fs::path &file) { loadModel(file); }
-  auto draw(Shader &shader) -> void;
-  auto drawWihtoutTextureBinding() -> void ;
+  // COPY
+  Model(const Model& other) = delete;
+  Model& operator=(const Model& other) = delete;
+  // MOVE
+  Model(Model&& other) noexcept { *this = std::move(other); }
+  Model& operator=(Model&& other);
+
+  auto destory() -> void;
+
+  auto draw(Shader &shader, uint offsetTexture, GLenum drawMode) -> void;
+  auto drawWithoutVAOBinding(Shader &shader, uint offsetTexture, GLenum drawMode) -> void;
+  auto drawWihtoutTextureBinding(GLenum drawMode) -> void ;
 
   // protected:
   std::vector<Mesh> meshes;
@@ -30,16 +41,40 @@ public:
   auto processMesh(aiMesh *mesh, const aiScene *scene) -> Mesh;
   auto loadMaterialTextures(aiMaterial *mat, aiTextureType type) -> std::vector<Texture>;
 };
-
-auto Model::draw(Shader &shader) -> void {
-  for (uint i = 0; i < meshes.size(); i++)
-    meshes[i].bindDraw(shader);
+ 
+Model& Model::operator=(Model&& other){
+  if (this != &other) {
+    meshes = std::move(other.meshes);
+    directory = std::move(other.directory);
+  }
+  return *this;
 }
 
-auto Model::drawWihtoutTextureBinding() -> void {
+auto Model::destory() -> void {
+  for (auto &m: meshes)
+    m.destory();
+}
+
+
+auto Model::draw(Shader &shader, uint offsetTexture = 0, GLenum drawMode=GL_TRIANGLES) -> void {
+  for (uint i = 0; i < meshes.size(); i++)
+    meshes[i].bindDraw(shader, offsetTexture, drawMode);
+}
+
+
+auto Model::drawWithoutVAOBinding(Shader &shader, uint offsetTexture = 0, GLenum drawMode=GL_TRIANGLES) -> void {
+  for (uint i = 0; i < meshes.size(); i++) {
+    auto &m{meshes[i]};
+    m.bindTextures(shader, offsetTexture);
+    m.draw(drawMode);
+  }
+}
+
+auto Model::drawWihtoutTextureBinding(GLenum drawMode=GL_TRIANGLES) -> void {
   for (uint i = 0; i < meshes.size(); i++){
-    meshes[i].bindVAO();
-    meshes[i].draw();
+    auto& m{meshes[i]};
+    m.bindVAO();
+    m.draw(drawMode);
   }
 }
 
@@ -51,11 +86,13 @@ auto Model::loadModel(const fs::path &file) -> void {
                         aiProcess_FlipUVs | aiProcess_OptimizeGraph)};
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
       !scene->mRootNode) {
-    std::clog << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+    std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
     return;
   }
   directory = file.root_path() / file.relative_path(); //
-  return processNode(scene->mRootNode, scene);
+  processNode(scene->mRootNode, scene);
+  std::clog << "LOG::Model::\"Loading Model Successful\": "
+            << file << std::endl;
 }
 
 auto Model::processNode(aiNode *node, const aiScene *scene) -> void {
@@ -131,8 +168,8 @@ auto Model::loadMaterialTextures(aiMaterial *mat, aiTextureType type)
     aiString str;
     auto &t{texes[i]};
     mat->GetTexture(type, i, &str);
-    t.id = Utils::loadTextureFromFile(fs::path(directory).parent_path() /
-                                      fs::path(str.C_Str()));
+    auto path = fs::path(directory).parent_path() / fs::path(str.C_Str());
+    t.id = DefaultTexRepo.get(path);
     switch (type) {
     case aiTextureType_SPECULAR:
       t.type = Texture::Type::Specular;
@@ -146,8 +183,6 @@ auto Model::loadMaterialTextures(aiMaterial *mat, aiTextureType type)
     default:
       t.type = Texture::Type::None;
     }
-    // TODO: insert texture to "globally loaded textures" map
-    //
   }
   return texes;
 }

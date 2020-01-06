@@ -21,17 +21,27 @@ class Mesh {
 public:
   std::vector<Vertex> vertices;
   std::vector<uint> indices;
-  std::vector<Texture> textures;
+std::vector<Texture> textures;
 
   Mesh(const std::vector<Vertex> &vertices, const std::vector<uint> &indices,
        const std::vector<Texture> &textures);
   Mesh(std::vector<Vertex> &vertices, std::vector<uint> &idices,
        std::vector<Texture> &textures);
 
-  auto draw() -> void;
+  // COPY
+  Mesh(const Mesh& other) = delete;
+  Mesh& operator=(const Mesh& other) = delete;
+
+  // MOVE
+  Mesh(Mesh&& other) noexcept { *this = std::move(other); }
+  Mesh& operator=(Mesh&& other);
+
+  auto draw(GLenum drawMode) -> void;
   auto bindVAO() const -> void;
-  auto bindTextures(const Shader &shader) -> void;
-  auto bindDraw(const Shader& shader) -> void;
+  auto bindTextures(const Shader &shader, uint offsetTexture) -> void;
+  auto bindDraw(const Shader& shader, uint offsetTexture, GLenum drawMode) -> void;
+
+  auto destory() -> void;
 
 private:
   uint VAO, VBO, EBO;
@@ -48,6 +58,18 @@ Mesh::Mesh(std::vector<Vertex> &vertices, std::vector<uint> &indices,
            std::vector<Texture> &textures)
     : vertices{vertices}, indices{indices}, textures{textures} {
   setupMesh();
+}
+
+Mesh& Mesh::operator=(Mesh&& other){
+  if (this != &other) {
+    vertices = std::move(other.vertices);
+    indices = std::move(other.indices);
+    textures = std::move(other.textures);
+    VAO = other.VAO;
+    VBO = other.VBO;
+    EBO = other.EBO;
+  }
+  return *this;
 }
 
 auto Mesh::setupMesh() -> void {
@@ -80,27 +102,33 @@ auto Mesh::setupMesh() -> void {
   glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                         reinterpret_cast<void *>(offsetof(Vertex, texCoords)));
 
-  glBindVertexArray(0);
+  // glBindVertexArray(0);
 }
 
 auto Mesh::bindVAO() const -> void {
   glBindVertexArray(VAO);
 }
 
-auto Mesh::bindTextures(const Shader &shader) -> void{
+auto Mesh::bindTextures(const Shader &shader, uint offsetTexture = 0) -> void{
   using namespace std::string_literals;
 
   uint diffuseN{1}, specularN{1}, normalN{1};
-  for (uint i = 0; i < textures.size(); i++) {
+  for (uint i = offsetTexture; i < textures.size() + offsetTexture; i++) {
     glActiveTexture(GL_TEXTURE0 + i);
+    uint idx = i - offsetTexture;
 
     std::string name;
-    switch (textures[i].type) {
+    switch (textures[idx].type) {
     case Texture::Type::Diffuse:
       name = "texture_diffuse" + std::to_string(diffuseN++);
       // std::clog <<name;
       break;
     case Texture::Type::Specular:
+      // static bool flg{false};
+      // if (!flg) {
+      //   std::clog << "spec unit: " << i << std::endl;
+      //   flg = true;
+      // }
       name = "texture_specular" + std::to_string(specularN++);
       // std::clog <<name;
       break;
@@ -111,99 +139,32 @@ auto Mesh::bindTextures(const Shader &shader) -> void{
       // case
     default:
       name = "INVALID";
-      std::clog << "INVALIND NAME FOR TEXTURE: " << shader.id() << ':' << i
-                << ", TYPE: " << textures[i].type << std::endl;
+      std::clog << "INVALIND NAME FOR TEXTURE: " << shader.id() << ':' << idx
+                << ", TYPE: " << textures[idx].type << std::endl;
     }
     auto samplerLocation{glGetUniformLocation(shader.id(), ("material."s + name).c_str())};
     // std::clog << "--> " << "material." + name << ": " << samplerLocation << std::endl;
     glUniform1i(samplerLocation, i);
-    glBindTexture(GL_TEXTURE_2D, textures[i].id);
+    glBindTexture(GL_TEXTURE_2D, textures[idx].id);
   }
   glActiveTexture(GL_TEXTURE0);
 }
-auto Mesh::draw() -> void {
-  glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+auto Mesh::draw(GLenum drawMode=GL_TRIANGLES) -> void {
+  glDrawElements(drawMode, indices.size(), GL_UNSIGNED_INT, 0);
 }
 
-auto Mesh::bindDraw(const Shader& shader) -> void {
+auto Mesh::bindDraw(const Shader& shader, uint offsetTexture = 0, GLenum drawMode=GL_TRIANGLES) -> void {
   bindVAO();
-  bindTextures(shader);
-  draw();
+  bindTextures(shader, offsetTexture);
+  draw(drawMode);
 }
 
-// class Mesh {
-// public:
-//   static constexpr int INVALID_MATERIAL{0xFF'FF'FF'FF};
-
-//   Mesh();
-//   ~Mesh();
-//   auto loadMesh(const fs::path &file) -> bool;
-//   auto render() -> void;
-
-// private:
-//   auto initFromScene(const aiScene *pScene, const fs::path &file) -> bool;
-//   auto initMaterials(const aiScene *pScene, const fs::path &file) -> bool;
-//   auto initMesh(uint idx, const aiMesh *paiMesh) -> void;
-//   auto clear() -> void;
-
-//   struct MeshEntry {
-//     MeshEntry();
-//     ~MeshEntry();
-
-//     auto init(const std::vector &vertices, const std::vector &indices) ->
-//     bool; GLuint VB; GLuint IB; uint numIndices; uint materialIndex;
-//   };
-
-//   std::vector<MeshEntry> m_Entries;
-//   std::vector<Texture&> m_Textures;
-// };
-
-// auto Mesh::loadMesh(const fs::path &file) -> bool {
-//   // Release previous mesh if loaded
-//   clear();
-
-//   Assimp::Importer importer;
-//   const aiScene *pScene{importer.ReadFile(
-//       file.c_str(), aiProcess_Triangulate | aiProcess_GenNormals |
-//                         aiProcess_FlipUVs)};
-//   if (pScene)
-//     return initFromScene(pScene, file);
-//   else
-//     std::clog << "Error parsing " << file << ": " <<
-//     importer.GetErrorString()
-//               << '\n';
-//   return false;
-// }
-
-// auto Mesh::render() -> void;
-
-// auto Mesh::initFromScene(const aiScene *pScene, const fs::path &file) -> bool
-// {
-//   m_Entries.resize(pScene->mNumMeshes);
-//   m_Textures.resize(pScene->mNumMaterials);
-//   // init the meshes in scene
-//   for (uint i = 0; i < m_Entries.size(); i++) {
-//     const aiMesh *paiMesh{pScene->mMeshes[i]};
-//     initMesh(i, paiMesh);
-//   }
-//   return initMaterials(pScene, file);
-// }
-
-// auto Mesh::initMaterials(const aiScene *pScene, const fs::path &file) -> bool
-// {} auto Mesh::initMesh(uint idx, const aiMesh *paiMesh) -> void {
-//   m_Entries[idx].materialIndex = paiMesh->mMaterialIndex;
-
-//   std::vector vertices;
-//   std::vector indices;
-//   const aiVector3D zero3D{0, 0, 0};
-//   for (uint i=0; i < paiMesh->mNumVertices;i++){
-//     const aiVector3D *pPos = paiMesh->mVertices + i;
-//     const aiVector3D *pNormal = paiMesh->HasNormals() ? (paiMesh->mVertices +
-//     i) : &zero3D; const aiVector3D *pTexCoord =paiMesh->HasTextureCoords(0) ?
-//     &(paiMesh->mTextureCoords[0][i]) : &zero3D;
-
-//     Vertex v
-// }
-
-// }
-// auto Mesh::clear() -> void;
+auto Mesh::destory() -> void {
+  for (auto &t : textures)
+    t.destory();
+  for (auto &v : vertices)
+    v.destory();
+  glDeleteBuffers(1, &VAO);
+  glDeleteBuffers(1, &EBO);
+  glDeleteBuffers(1, &VBO);
+}

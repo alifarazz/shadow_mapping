@@ -1,5 +1,5 @@
-#ifndef SHADER_HH
-#define SHADER_HH
+#pragma once
+
 
 #include <glad/glad.h>
 
@@ -15,7 +15,7 @@ namespace fs = std::filesystem;
 class Shader {
 private:
   static auto ReadFile(const fs::path &path, std::string &content) -> void;
-  static auto CompileShader(unsigned int shader) -> void;
+  static auto CompileShader(unsigned int shader) -> bool;
 
   // No copy constructor
   Shader(const Shader &) = delete;
@@ -25,16 +25,11 @@ private:
   std::vector<GLuint> createdShaders;
 
 public:
-  Shader &operator=(Shader &&other) {
-    program_ = other.program_;
-    other.program_ = 0;
-    if (other.program_ != 0)
-      glDeleteProgram(other.program_);
-    return *this;
-  }
+  Shader &operator=(Shader &&other);
 
-  Shader();
-  ~Shader();
+  Shader(); 
+
+  auto destory() -> void;
 
   auto attach(const fs::path &shaderPath, GLenum shaderType) -> Shader &;
   auto link() -> void;
@@ -44,10 +39,17 @@ public:
 
 Shader::Shader() { program_ = glCreateProgram();}
 
-Shader::~Shader() {
-  // glUseProgram(0);
-  // glDeleteProgram(program_);
+auto Shader::destory() -> void {
+    glDeleteProgram(program_);
 }
+
+Shader& Shader::operator=(Shader &&other) {
+    program_ = other.program_;
+    other.program_ = 0;
+    if (other.program_ != 0)
+      glDeleteProgram(other.program_);
+    return *this;
+  }
 
 auto Shader::attach(const fs::path &shaderPath, GLenum shaderType) -> Shader & {
   std::string shdr_src;
@@ -55,6 +57,7 @@ auto Shader::attach(const fs::path &shaderPath, GLenum shaderType) -> Shader & {
     ReadFile(shaderPath, shdr_src);
   } catch (std::ifstream::failure &e) {
     std::cerr << "Shader:: failed to open shader source files\n"
+              << "\tpath: " << shaderPath << "\n\t"
               << e.what() << std::endl;
     shdr_src = "";
   }
@@ -62,7 +65,11 @@ auto Shader::attach(const fs::path &shaderPath, GLenum shaderType) -> Shader & {
   GLuint shdr{glCreateShader(shaderType)};
   const GLchar *source = shdr_src.data();
   glShaderSource(shdr, 1, &source, nullptr);
-  CompileShader(shdr);
+  // std::clog << "SHADER::CompileShader:: compiling shader: "
+  //           << shaderPath << std::endl;
+  if (CompileShader(shdr))
+    std::clog << "LOG::Shader::\"Compiling Shader Successful\": "
+              << shaderPath << std::endl;
 
   createdShaders.push_back(shdr);
   glAttachShader(program_, shdr);
@@ -96,12 +103,15 @@ auto Shader::link() -> void {
     // The maxLength includes the NULL character
     std::vector<GLchar> log(static_cast<std::size_t>(maxLength));
     glGetProgramInfoLog(program_, maxLength, &maxLength, log.data());
+    std::cerr << "Shader:: failed to link shader program" << std::endl;
     std::copy(begin(log), end(log),
               std::ostream_iterator<GLchar>{std::cerr, ""});
 
-    // glDeleteProgram(program_); // Don't leak the program.
+    glDeleteProgram(program_); // Don't leak the program.
+  } else {
+    std::clog << "LOG::Shader::\"Linking Shader Program Successful\""
+              << std::endl;
   }
-
   // Program is linked successfully.
 }
 
@@ -111,7 +121,7 @@ auto Shader::getUniform(const std::string &name) const -> GLint {
   return glGetUniformLocation(program_, name.c_str());
 }
 
-auto Shader::CompileShader(GLuint shader) -> void {
+auto Shader::CompileShader(GLuint shader) -> bool {
   glCompileShader(shader);
 
   GLint isCompiled = 0;
@@ -119,6 +129,7 @@ auto Shader::CompileShader(GLuint shader) -> void {
   if (isCompiled == GL_FALSE) {
     GLint maxLength = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &maxLength);
+    std::cerr << "Shader:: failed to compile shader program" << std::endl;
 
     // The maxLength includes the NULL character
     std::vector<GLchar> log(static_cast<std::size_t>(maxLength));
@@ -127,8 +138,9 @@ auto Shader::CompileShader(GLuint shader) -> void {
               std::ostream_iterator<GLchar>{std::cerr, ""});
 
     glDeleteShader(shader); // Don't leak the shader.
+    return false;
   }
-  // Shader compilation is successful.
+  return true;  // Shader compilation is successful.
 }
 
 auto Shader::ReadFile(const fs::path &path, std::string &content) -> void {
@@ -138,5 +150,3 @@ auto Shader::ReadFile(const fs::path &path, std::string &content) -> void {
                      (std::istreambuf_iterator<char>()))};
   content = std::move(r);
 }
-
-#endif

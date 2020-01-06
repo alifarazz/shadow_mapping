@@ -1,6 +1,6 @@
 #version 330 core
 
-layout(location = 0) out vec4 FragColor;
+out vec4 FragColor;
 
 in vec2 TexCoords;
 
@@ -10,4 +10,5 @@ void main()
 {
   float depthValue = texture(depthMapTexture, TexCoords).r;
   FragColor = vec4(vec3(depthValue), 1.0f);
+  // FragColor = vec4(1,1,1,1);
 }

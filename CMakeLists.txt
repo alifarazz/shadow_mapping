@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(base)
+project(shadow)
 
 option(GLFW_BUILD_DOCS OFF)
 option(GLFW_BUILD_EXAMPLES OFF)
@@ -27,17 +27,17 @@ else()
     endif()
 endif()
 
-include_directories(include/
+include_directories(src/include/
                     # vendor/assimp/include/
                     vendor/stb/
-#                   vendor/bullet/src/
+                    # vendor/bullet/src/
                     vendor/glad/
                     # vendor/glfw/include/
                     vendor/glm/
                     )
 
 file(GLOB VENDORS_SOURCES vendor/glad/glad.c)
-file(GLOB PROJECT_HEADERS include/*.hh)
+file(GLOB PROJECT_HEADERS src/include/*.hh)
 file(GLOB PROJECT_SOURCES src/*.cc src/*.c)
 file(GLOB PROJECT_SHADERS shader/*.comp
                           shader/*.frag

@@ -2,7 +2,11 @@
 
 #include <glad/glad.h>
 
+#include "utils.hh"
+
 #include <string>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 class Texture {
 public:
@@ -13,12 +17,12 @@ public:
     None,
   };
 
-  // ~Texture() { glDeleteTextures(1, &id); }
+  auto destory() -> void { glDeleteTextures(1, &id); }
 
   GLuint id;
   Type type;
 
-  static auto typeName(Type t) -> std::string {
+  static auto typeName(const Type t) -> std::string {
     switch (t) {
     case Type::Diffuse:
       return "Diffuse";
